@@ -1,6 +1,8 @@
 package org.supercsv.util;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 
 import org.supercsv.exception.SuperCSVException;
@@ -83,7 +85,7 @@ Method getMethod(final TwoDHashMap<String, String, Method> cache, final Object d
 	return method;
 }
 
-public <T> Method getSetMethod(final Object destinationObject, final String variableName, final Class<?> variableType) {
+public <T> Method getSetMethod(final Object destinationObject, final String variableName, Class<?> variableType) {
 	Method method = setMethodsCache.get(destinationObject.getClass(), variableType, variableName);
 	if( method == null ) {
 		// we don't know the destination type for the set method, just use whatever we can find
@@ -164,6 +166,18 @@ Method inspectClassForSetMethods(final Object destinationObject, final Class var
 		// retry again due to autoboxing in java we need to try both cases
 		try {
 			if( autoboxingConverter.containsKey(variableType) == false ) {
+				// check for a method with a matching supertype of the parameter, or see if there are
+				// methods (candidates) with the expected name but a different parameter type
+				final Either<Collection<Method>, Method> candidatesOrMethod = getMethodWithAssignableParamType(destinationObject, methodName,
+					variableType);
+				if(candidatesOrMethod.isRight()) {
+					return candidatesOrMethod.right();
+				}
+				else if(!candidatesOrMethod.left().isEmpty()) {
+					throw new SuperCSVReflectionException(String.format("Can't find method '%s(%s)' in class '%s'. "
+						+ "There's at least one candidate with a matching name but different parameter type: %s", methodName, variableType,
+						destinationObject.getClass().getName(), candidatesOrMethod.left().toString()), e);
+				}
 				throwException(destinationObject, variableType, methodName, e);
 			}
 			return destinationObject.getClass().getMethod(methodName, autoboxingConverter.get(variableType));
@@ -176,6 +190,23 @@ Method inspectClassForSetMethods(final Object destinationObject, final Class var
 		}
 	}
 	throw new SuperCSVException("This can never happen!");
+}
+
+/** Returns either a matching method (right) or a collection of candidates (left). */
+private Either<Collection<Method>, Method> getMethodWithAssignableParamType(final Object destinationObject, final String methodName,
+	final Class<?> variableType) throws SecurityException {
+	final Method[] methods = destinationObject.getClass().getMethods();
+	final Collection<Method> candidates = new ArrayList<Method>();
+	for(Method m : methods) {
+		if(m.getName().equals(methodName)) {
+			final Class<?>[] paramTypes = m.getParameterTypes();
+			if(paramTypes.length == 1 && paramTypes[0].isAssignableFrom(variableType)) {
+				return Either.right(m);
+			}
+			candidates.add(m);
+		}
+	}
+	return Either.left(candidates);
 }
 
 /**
@@ -193,4 +224,98 @@ private void throwException(final Object destinationObject, final Class variable
 		+ "Have you forgot to convert the data so that a wrong set method is called?", methodName, variableType,
 		destinationObject.getClass().getName()), e);
 }
+
+
+/**
+ * The <code>Either</code> type represents a value of one of two possible types (a disjoint union).
+ * The data constructors; <code>Left</code> and <code>Right</code> represent the two possible
+ * values. It's inspired by FP, e.g. scala and functionaljava.
+ */
+private static abstract class Either<L, R> {
+
+	/**
+	 * Returns <code>true</code> if this either is a left, <code>false</code> otherwise.
+	 * 
+	 * @return <code>true</code> if this either is a left, <code>false</code> otherwise.
+	 */
+	public abstract boolean isLeft();
+	
+	/**
+	 * Returns the left value of this either or fails if it isn't a left.
+	 */
+	public abstract L left();
+	
+	/**
+	 * Returns <code>true</code> if this either is a right, <code>false</code> otherwise.
+	 * 
+	 * @return <code>true</code> if this either is a right, <code>false</code> otherwise.
+	 */
+	public abstract boolean isRight();
+	
+	/**
+	 * Returns the right value of this either or fails if it isn't a right.
+	 */
+	public abstract R right();
+	
+	static <L, R> Either<L, R> left(L left) {
+		return new Left<L, R>(left);
+	}
+	
+	static <L, R> Either<L, R> right(R right) {
+		return new Right<L, R>(right);
+	}
+	
+	private static final class Left<A, B> extends Either<A, B> {
+		private final A a;
+		
+		Left(final A a) {
+			this.a = a;
+		}
+		
+		public boolean isLeft() {
+			return true;
+		}
+		
+		public boolean isRight() {
+			return false;
+		}
+		
+		@Override
+		public A left() {
+			return a;
+		}
+		
+		@Override
+		public B right() {
+			throw new IllegalStateException("This is a left, asking a left for a right is not allowed.");
+		}
+	}
+	
+	private static final class Right<A, B> extends Either<A, B> {
+		private final B b;
+		
+		Right(final B b) {
+			this.b = b;
+		}
+		
+		public boolean isLeft() {
+			return false;
+		}
+		
+		public boolean isRight() {
+			return true;
+		}
+		
+		@Override
+		public A left() {
+			throw new IllegalStateException("This is a right, asking a right for a left is not allowed.");
+		}
+		
+		@Override
+		public B right() {
+			return b;
+		}
+	}
+}
+
 }

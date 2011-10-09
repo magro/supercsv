@@ -1,6 +1,8 @@
 package org.supercsv.util;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collection;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -17,6 +19,7 @@ public Ignore() {
 /** we use objects of this class as access test */
 static class ObjectMock {
 int i = STARTVAL;
+Collection<String> items = Arrays.asList("foo", "bar");
 
 public int getA() {
 	return i;
@@ -57,6 +60,15 @@ public void setD(final int i) {
 public void setI(final int i) {
 	this.i = i;
 }
+
+public Collection<String> getItems() {
+	return items;
+}
+
+public void setItems(Collection<String> items) {
+	this.items = items;
+}
+
 }
 
 private static final int STARTVAL = 42;
@@ -95,6 +107,18 @@ public void test_Set_Lookup() throws Exception {
 	Assert.assertEquals("object read", ENDVAL + 1, cache.getGetMethod(om, "i").invoke(om));
 	// System.out.println("set t1 " + time1 + " t2 " + time2);
 	Assert.assertTrue("Cache lookup should be faster", time1 > time2);
+}
+
+@Test
+public void test_Set_Lookup_WithAssignableCollectionAsVariableType() throws Exception {
+	final MethodCache cache = new MethodCache();
+	final ObjectMock om = new ObjectMock();
+	
+	Method actual = cache.getSetMethod(om, "items", Arrays.asList("foo").getClass());
+	Assert.assertNotNull("Method with matching supertype of parameter not found.", actual);
+
+	Method actual2 = cache.getSetMethod(om, "items", Arrays.asList("foo").getClass());
+	Assert.assertSame("The set method is not cached.", actual, actual2);
 }
 
 @Test
