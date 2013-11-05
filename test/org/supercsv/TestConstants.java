@@ -1,10 +1,11 @@
 package org.supercsv;
 
-import java.util.Date;
 
+import org.joda.time.DateTime;
 import org.supercsv.util.CSVContext;
-
 import spiffy.core.util.DateHelper;
+
+import java.util.Date;
 
 public class TestConstants {
 
@@ -15,5 +16,6 @@ public class TestConstants {
 	public static final long VALUE_17_AS_LONG = 17L;
 	public static final Date EXPECTED_DATE = DateHelper.date(2007, 4, 17);
 	public static final CSVContext ANONYMOUS_CSVCONTEXT = new CSVContext(0, 0);
+    public static final DateTime EXPECTED_DATE_TIME = new DateTime(2007, 4, 17, 0, 0);
 
 }
